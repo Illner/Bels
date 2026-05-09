@@ -139,6 +139,12 @@ def create_parser() -> argparse.ArgumentParser:
                             metavar="[big positive number | None]",
                             help="seed (ignored for fully dense BNs): if set to `None`, a new seed will be randomly generated")
 
+    parser_tmp.add_argument("-gp",
+                            "--generate_probabilities",
+                            action="store_true",
+                            default=False,
+                            help="if set, nontrivial random probabilities will be generated; otherwise, deterministic (1.0/0.0) probabilities will be used")
+
     return parser_tmp
 
 
@@ -203,6 +209,32 @@ def create_symptom_value(position_1: int, position_2: int) -> str:
     return "value_s_" + str(position_1 + 1) + "_" + str(position_2 + 1)
 
 
+def generate_probability_distribution(size: int) -> List[float]:
+    """
+    Generates a list of random, nontrivial probabilities of the given size
+    summing to exactly 1.0 with 3 decimal places.
+    """
+    assert (size > 1)
+
+    # Enforce a minimum floor of 1% (0.010) per value
+    min_p = 0.010
+    if size * min_p >= 1.0:
+        min_p = 1.0 / (size * 10.0)
+
+    remaining_space = 1.0 - (size * min_p)
+    raw_weights = [random.random() for _ in range(size)]
+    total_weight = sum(raw_weights)
+
+    # Scale weights to fill the remaining space and add the floor
+    probs = [round(min_p + (w / total_weight) * remaining_space, 3) for w in raw_weights]
+
+    # Correct floating-point rounding errors on the first element
+    rounding_error = round(1.0 - sum(probs), 3)
+    probs[0] = round(probs[0] + rounding_error, 3)
+
+    return probs
+
+
 def create_disease_probability(position: int) -> str:
     assert (position >= 0)
     assert (position < len(diseases))
@@ -210,14 +242,16 @@ def create_disease_probability(position: int) -> str:
     tmp: str = "table"
     max_position: int = diseases[position]
 
-    for v in range(max_position):
-        if v == 0:
-            tmp += " 1.0"
-        elif v < max_position - 1:
-            tmp += ", 0.0"
-        else:
-            tmp += ", 0.0;"
+    # Generate probabilities
+    if generate_probabilities:
+        probs = generate_probability_distribution(max_position)
+        formatted_probs = [f"{p:.3f}" for p in probs]
 
+    # Deterministic probabilities
+    else:
+        formatted_probs = ["1.0" if v == 0 else "0.0" for v in range(max_position)]
+
+    tmp += " " + ", ".join(formatted_probs) + ";"
     return tmp
 
 
@@ -249,14 +283,17 @@ def create_symptom_probability_recursion(position, positions: List[int], current
         string += ")"
 
         max_position = symptoms[position]
-        for k in range(max_position):
-            if k == 0:
-                string += " 1.0"
-            elif k < max_position - 1:
-                string += ", 0.0"
-            else:
-                string += ", 0.0;\n"
 
+        # Generate probabilities
+        if generate_probabilities:
+            probs = generate_probability_distribution(max_position)
+            formatted_probs = [f"{p:.3f}" for p in probs]
+
+        # Deterministic probabilities
+        else:
+            formatted_probs = ["1.0" if k == 0 else "0.0" for k in range(max_position)]
+
+        string += " " + ", ".join(formatted_probs) + ";\n"
         return string
 
     for v in range(diseases[positions[current_position]]):
@@ -303,6 +340,7 @@ if __name__ == '__main__':
         raise Exception("Small density!")
 
     path: str = args.output_file
+    generate_probabilities: bool = args.generate_probabilities
 
     # Print arguments
     print("Arguments:")
@@ -313,6 +351,7 @@ if __name__ == '__main__':
     print("\tdensity: " + str(density) + "%")
     if randomness:
         print("\tseed: " + str(seed))
+    print("\tgenerate probabilities: " + str(generate_probabilities))
     print("Number of edges: " + str(number_of_edges))
     print()
 
