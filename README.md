@@ -14,7 +14,7 @@ Supported formats for Bayesian networks: [BIF (Bayesian Interchange Format)](htt
 
 * [pgmpy](https://pypi.org/project/pgmpy/) 0.1.25 (Linux / macOS / Windows)
 
-Install the required package the following:
+Install the required package as follows:
 
 ```bash
 pip install --user pgmpy==0.1.25
@@ -32,6 +32,7 @@ pip install --user pgmpy==0.1.25
                           [ -ds positive_integer (min: 2, default: 2) ] 
                           [ -d positive_integer (min: 1, max: 100, default: 100) ] 
                           [ -s positive_integer | None (default: None) ]
+                          [ -gp ]
 ```
 
 Files: <br>
@@ -41,7 +42,8 @@ Files: <br>
 **-bls** - bottom layer size *(min: 2, default: 5)* <br>
 **-ds** - domain size *(min: 2, default: 2)* <br>
 **-d** - density *(min: 1, max: 100, default: 100)* <br>
-**-s** - seed (ignored for fully dense BNs): if set to None, a new seed will be randomly generated *(default: None)*
+**-s** - seed (ignored for fully dense BNs): if set to None, a new seed will be randomly generated *(default: None)* <br>
+**-gp** - if set, generates nontrivial random probabilities summing to exactly 1.0 for CPT blocks; otherwise, deterministic (1.0/0.0) probabilities are used *(default: False)*
 
 ## Bels encoder
 
@@ -51,6 +53,7 @@ Files: <br>
 
 ```console
 ./Encode.py input_file output_file [ -ct {nwDNNF, dDNNF, sdDNNF} (default: nwDNNF) ]
+                                   [ -mc ] [ -e ] [ -s positive_integer | None (default: None) ]
 ```
 
 Files: <br>
@@ -61,6 +64,51 @@ Files: <br>
 &nbsp;&nbsp;&nbsp;&nbsp; `nwDNNF` – negative weak DNNF (nwDNNF) circuit </br>
 &nbsp;&nbsp;&nbsp;&nbsp; `dDNNF` – deterministic DNNF (d-DNNF) circuit </br>
 &nbsp;&nbsp;&nbsp;&nbsp; `sdDNNF` – smooth deterministic DNNF (sd-DNNF) circuit
+
+**-mc** - if set, outputs CNF formatted for the Model Counting Competition (includes reproducibility metadata c r, unified track descriptor c t pwmc, and explicit weight declarations for every literal) *(default: False)* <br>
+**-e** - if set, randomly selects a parentless/root variable and assigns it a random state as evidence (formatted as a unit clause at the bottom of the CNF) *(default: False)* <br>
+**-s** - seed used to deterministically select the evidence variable and state. If set to None, a secure random seed is generated and printed *(default: None)*
+
+## :exclamation: Model Counting Competition (MCC)
+
+Bels supports generating benchmarks strictly compliant with the official input specifications for the Model Counting Competition.
+
+To compile a weighted CNF formula for competition tracks:
+
+1. Generate a Bayesian network with non-trivial, random probabilities using the **-gp** flag.
+2. Encode using the **-mc** flag to inject the required header comments and literal weight specifications.
+3. Provide seed-replicable evidence using -e and -s. (optional)
+
+```console
+./Generate.py sample.bif -tls 4 -bls 5 -ds 2 -d 100 -gp
+```
+
+```console
+./Encode.py sample.bif sample.cnf -ct sdDNNF -mc -e -s 12345
+```
+
+The resulting sample.cnf will have the mandatory structures formatted as follows:
+
+```text
+c 4_5_2_100_e_12345
+c
+c r https://github.com/Illner/Bels https://github.com/Illner/Bels
+c
+c Parameters:
+...
+p cnf 66 264
+c t pwmc
+c
+c Indicator variable weights:
+c p weight 1 1 0
+c p weight -1 1 0
+...
+c p weight 13 0.891 0
+c p weight -13 1 0
+...
+c evidence
+4 0
+```
 
 ## :exclamation: AAAI-25
 
