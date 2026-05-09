@@ -1,12 +1,13 @@
 #!/usr/bin/env python3
 
 import os
+import random
 import argparse
 from enum import Enum
 from pathlib import Path
 from functools import cmp_to_key
-from typing import Dict, List, Set
 from pgmpy.readwrite import BIFReader
+from typing import Dict, List, Set, Union
 
 
 class SelectorVariableTypeEnum(Enum):
@@ -87,6 +88,38 @@ def output_file_path_parser(path: str) -> str:
     raise argparse.ArgumentTypeError(f"An error occurred while creating the output file ({path})!")
 
 
+def seed_parser(value: Union[int, str]) -> int:
+    return positive_int_or_none_parser(value, False, False)
+
+
+def positive_int_or_none_parser(value: Union[int, str], percentage: bool, at_least_two: bool) -> Union[int, None]:
+    """
+    Check if the value is a (positive) number (int) or None
+    :raises ArgumentTypeError: if the value is invalid
+    """
+
+    # None
+    if isinstance(value, str) and value.lower() == "none":
+        return None
+
+    try:
+        value = int(value)
+    except ValueError:
+        raise argparse.ArgumentTypeError(f"\"{value}\" has an invalid type ({type(value)}); int is expected!")
+
+    # Number
+    if value <= 0:
+        raise argparse.ArgumentTypeError(f"\"{value}\" must be positive!")
+
+    if at_least_two and value == 1:
+        raise argparse.ArgumentTypeError(f"\"{value}\" must be at least 2!")
+
+    if percentage and value > 100:
+        raise argparse.ArgumentTypeError(f"\"{value}\" must be at most 100!")
+
+    return value
+
+
 def create_parser() -> argparse.ArgumentParser:
     # Create the parser
     parser_tmp = argparse.ArgumentParser(prog="Encode.py",
@@ -112,6 +145,26 @@ def create_parser() -> argparse.ArgumentParser:
                             type=str,
                             choices=circuit_type_enum_names,
                             help="circuit type")
+
+    parser_tmp.add_argument("-mc",
+                            "--model_competition",
+                            action="store_true",
+                            default=False,
+                            help="if set, generates the CNF formatted for the Model Counting Competition, including the mandatory reproducibility header (c r originUrl/doi descUrl/doi), the problem type descriptor (c t wmc), and explicit literal weights")
+
+    parser_tmp.add_argument("-e",
+                            "--evidence",
+                            action="store_true",
+                            default=False,
+                            help="if set, randomly selects a parentless/root variable and assigns it a random state as evidence")
+
+    parser_tmp.add_argument("-s",
+                            "--seed",
+                            action="store",
+                            default=None,
+                            type=seed_parser,
+                            metavar="[big positive number | None]",
+                            help="seed (for evidence): if set to `None`, a new seed will be randomly generated")
 
     return parser_tmp
 
@@ -387,8 +440,17 @@ def create_parameter_clauses(index_states_arg: List[int], variables_arg: List[st
 
             assert len(variables_arg) > len(independent_variables)
 
+            parameter_variable: int = 0
+            is_zero_prob_determinism = (determinism and probability == 0)
+
             if not independent_variables:
-                tmp_file.write("c " + str(probability) + "\n")
+                if model_competition and not is_zero_prob_determinism:
+                    parameter_variable = get_new_variable_index()
+                    tmp_file.write(f"c p weight {parameter_variable} {probability:.3f} 0\n")
+                    tmp_file.write(f"c p weight -{parameter_variable} 1 0\n")
+                else:
+                    tmp_file.write("c " + str(probability) + "\n")
+
                 tmp_file.write(core_clause)
             else:
                 number_of_shrinks += 1
@@ -401,18 +463,23 @@ def create_parameter_clauses(index_states_arg: List[int], variables_arg: List[st
 
                 saved_clauses.add(core_clause_reduced)
 
-                tmp_file.write("c " + str(probability) + "\n")
+                if model_competition and not is_zero_prob_determinism:
+                    parameter_variable = get_new_variable_index()
+                    tmp_file.write(f"c p weight {parameter_variable} {probability:.3f} 0\n")
+                    tmp_file.write(f"c p weight -{parameter_variable} 1 0\n")
+                else:
+                    tmp_file.write("c " + str(probability) + "\n")
+
                 tmp_file.write(core_clause_reduced)
 
                 core_clause = core_clause_reduced
-
-            parameter_variable: int = 0
 
             if determinism and probability == 0:
                 number_of_zeros += 1
                 tmp_file.write(get_selector_variable_for_hard_clauses())
             else:
-                parameter_variable = get_new_variable_index()
+                if parameter_variable == 0:
+                    parameter_variable = get_new_variable_index()
                 tmp_file.write(" " + str(parameter_variable) + " 0\n")
 
             number_of_clauses += 1
@@ -507,11 +574,25 @@ if __name__ == '__main__':
     input_file_path: str = args.input_file
     output_file_path: str = args.output_file
 
+    evidence: bool = args.evidence
+    model_competition: bool = args.model_competition
+
+    # Seed
+    if args.seed is None:
+        seed: int = int.from_bytes(os.urandom(16), 'big')
+    else:
+        seed: int = args.seed
+    random.seed(seed)
+
     # Print arguments
     print("Arguments:")
     print("\tinput file: " + input_file_path)
     print("\toutput file: " + output_file_path)
     print("\tcircuit type: " + CircuitTypeEnum[args.circuit_type].name)
+    print("\tevidence: " + str(evidence))
+    if evidence:
+        print("\tseed: " + str(seed))
+    print("\tmodel competition: " + str(model_competition))
     print()
 
     # Parameters
@@ -667,8 +748,18 @@ if __name__ == '__main__':
     with open(TMP_FILE_PATH, 'r', encoding="utf-8") as tmp_file:
         with open(output_file_path, 'w', encoding="utf-8") as output_file:
             # Name
-            output_file.write("c " + bayesian_network.get_network_name() + "\n")
+            if evidence:
+                output_file.write("c " + bayesian_network.get_network_name() + "_e_" + str(seed) + "\n")
+            else:
+                output_file.write("c " + bayesian_network.get_network_name() + "\n")
             output_file.write("c\n")
+
+            # c r originUrl/doi descUrl/doi [generatorUrl/doi]
+            if model_competition:
+                origin_url = "https://github.com/Illner/Bels"
+                desc_url = "https://github.com/Illner/Bels"
+                output_file.write(f"c r {origin_url} {desc_url}\n")
+                output_file.write("c\n")
 
             # Parameters
             output_file.write("c Parameters:\n")
@@ -685,17 +776,48 @@ if __name__ == '__main__':
             output_file.write("c \tselector variable type: " + selector_variable_type.name + "\n")
             output_file.write("c\n")
 
-            for variable in variables_bayesian_network:
-                output_file.write("c " + variable + "\n")
-                for state in states_bayesian_network[variable]:
-                    output_file.write("c \t" + state + ": " + get_variable_for_name(variable, state) + "\n")
+            # for variable in variables_bayesian_network:
+            #     output_file.write("c " + variable + "\n")
+            #     for state in states_bayesian_network[variable]:
+            #         output_file.write("c \t" + state + ": " + get_variable_for_name(variable, state) + "\n")
 
             output_file.write("c selector variables: " + str(first_selector_variable) + ", ...\n")
             output_file.write("c\n")
 
-            output_file.write("p cnf " + str(number_of_variables) + " " + str(number_of_clauses) + "\n")
+            number_of_clauses_tmp = number_of_clauses
+            if evidence:
+                number_of_clauses_tmp += 1
+
+            output_file.write("p cnf " + str(number_of_variables) + " " + str(number_of_clauses_tmp) + "\n")
+
+            if model_competition:
+                # Header
+                output_file.write("c t pwmc\n")
+                output_file.write("c\n")
+
+                # Indicator variable weights
+                output_file.write("c Indicator variable weights:\n")
+                for var_id in range(1, first_selector_variable):
+                    output_file.write(f"c p weight {var_id} 1 0\n")
+                    output_file.write(f"c p weight -{var_id} 1 0\n")
 
             output_file.write(tmp_file.read())
+
+            # Generate and set evidence
+            if evidence:
+                disease_variables = [v for v in variables_bayesian_network if v.startswith("Disease")]
+
+                if not disease_variables:
+                    raise Exception("The BN must be generated by \"Generate.py\"")
+
+                chosen_symptom = random.choice(disease_variables)
+                chosen_state = random.choice(states_bayesian_network[chosen_symptom])
+
+                cnf_var_index = mapping_from_variable_state_to_variable_index[get_name_for_mapping(chosen_symptom, chosen_state)]
+
+                # output_file.write(f"c Evidence: {chosen_symptom} = {chosen_state}\n")
+                output_file.write(f"c evidence\n")
+                output_file.write(f"{cnf_var_index} 0\n")
 
     os.remove(TMP_FILE_PATH)
     reset()
