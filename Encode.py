@@ -762,19 +762,19 @@ if __name__ == '__main__':
                 output_file.write("c\n")
 
             # Parameters
-            output_file.write("c Parameters:\n")
-            if determinism:
-                output_file.write("c \tdeterminism\n")
-            if add_minor_clauses:
-                output_file.write("c \tminor clauses\n")
-            if indicator_clauses:
-                output_file.write("c \tindicator clauses\n")
-            if context_specific_independence:
-                output_file.write("c \tcontext-specific independence\n")
-            if constraint_clauses_for_leaf_variables:
-                output_file.write("c \tconstraint clauses for leaf variables\n")
-            output_file.write("c \tselector variable type: " + selector_variable_type.name + "\n")
-            output_file.write("c\n")
+            # output_file.write("c Parameters:\n")
+            # if determinism:
+            #     output_file.write("c \tdeterminism\n")
+            # if add_minor_clauses:
+            #     output_file.write("c \tminor clauses\n")
+            # if indicator_clauses:
+            #     output_file.write("c \tindicator clauses\n")
+            # if context_specific_independence:
+            #     output_file.write("c \tcontext-specific independence\n")
+            # if constraint_clauses_for_leaf_variables:
+            #     output_file.write("c \tconstraint clauses for leaf variables\n")
+            # output_file.write("c \tselector variable type: " + selector_variable_type.name + "\n")
+            # output_file.write("c\n")
 
             # for variable in variables_bayesian_network:
             #     output_file.write("c " + variable + "\n")
@@ -794,6 +794,12 @@ if __name__ == '__main__':
                 # Header
                 output_file.write("c t pwmc\n")
                 output_file.write("c\n")
+
+                # Projection
+                output_file.write("c p show")
+                for var in range(1, number_of_variables + 1):
+                    output_file.write(" " + str(var))
+                output_file.write(" 0 \n")
 
                 # Indicator variable weights
                 output_file.write("c Indicator variable weights:\n")
