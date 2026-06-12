@@ -792,14 +792,14 @@ if __name__ == '__main__':
 
             if model_competition:
                 # Header
-                output_file.write("c t pwmc\n")
+                output_file.write("c t wmc\n")
                 output_file.write("c\n")
 
                 # Projection
-                output_file.write("c p show")
-                for var in range(1, number_of_variables + 1):
-                    output_file.write(" " + str(var))
-                output_file.write(" 0 \n")
+                # output_file.write("c p show")
+                # for var in range(1, number_of_variables + 1):
+                #     output_file.write(" " + str(var))
+                # output_file.write(" 0 \n")
 
                 # Indicator variable weights
                 output_file.write("c Indicator variable weights:\n")

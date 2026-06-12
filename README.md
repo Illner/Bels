@@ -65,7 +65,7 @@ Files: <br>
 &nbsp;&nbsp;&nbsp;&nbsp; `dDNNF` – deterministic DNNF (d-DNNF) circuit </br>
 &nbsp;&nbsp;&nbsp;&nbsp; `sdDNNF` – smooth deterministic DNNF (sd-DNNF) circuit
 
-**-mc** - if set, outputs CNF formatted for the Model Counting Competition (includes reproducibility metadata c r, unified track descriptor c t pwmc, and explicit weight declarations for every literal) *(default: False)* <br>
+**-mc** - if set, outputs CNF formatted for the Model Counting Competition (includes reproducibility metadata c r, unified track descriptor c t wmc, and explicit weight declarations for every literal) *(default: False)* <br>
 **-e** - if set, randomly selects a parentless/root variable and assigns it a random state as evidence (formatted as a unit clause at the bottom of the CNF) *(default: False)* <br>
 **-s** - seed used to deterministically select the evidence variable and state. If set to None, a secure random seed is generated and printed *(default: None)*
 
@@ -97,7 +97,7 @@ c
 c Parameters:
 ...
 p cnf 66 264
-c t pwmc
+c t wmc
 c
 c Indicator variable weights:
 c p weight 1 1 0
